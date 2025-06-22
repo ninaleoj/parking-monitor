@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Manage Your Parking slot</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f0f0f0;
+      text-align: center;
+      padding: 20px;
+    }
+    h2 {
+      margin-bottom: 10px;
+    }
+    input, button {
+      padding: 10px;
+      margin: 8px 0;
+      width: 80%;
+      max-width: 300px;
+    }
+    .slot {
+      margin: 20px auto;
+      padding: 20px;
+      width: 200px;
+      font-size: 1.1rem;
+      color: white;
+      border-radius: 8px;
+      background: green;
+      cursor: pointer;
+    }
+    .reserved { background: red; }
+    .hidden { display: none; }
+    #logoutBtn { margin-top: 20px; }
+  </style>
+</head>
+<body>
+
+  <h2>Parking Slot Owner Portal</h2>
+
+  <div id="login-form">
+    <input type="number" id="slot" placeholder="Parking Slot # (e.g., 12)" />
+    <input type="password" id="pass" placeholder="Password" />
+    <button onclick="login()">Login / Register</button>
+  </div>
+
+  <div id="slot-control" class="hidden">
+    <p>Parking Slot Status:</p>
+    <div id="slot-btn" class="slot" onclick="toggleslot()">Loading...</div>
+    <button id="logoutBtn" onclick="logout()">Logout</button>
+  </div>
+
+  <script>
+    let slotNum = null;
+    let token = null;
+    let reserved = false;
+
+    async function login() {
+      slotNum = parseInt(document.getElementById("slot").value);
+      const password = document.getElementById("pass").value;
+
+      const res = await fetch('/api/login-slot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot: slotNum, password })
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        token = data.token;
+        document.getElementById("login-form").classList.add("hidden");
+        document.getElementById("slot-control").classList.remove("hidden");
+        loadslotStatus();
+      } else if (data.needRegister) {
+        const confirm = window.confirm("Owner of this parking slot has no password yet. Do you want to register this password?");
+        if (confirm) {
+          const registerRes = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slot: slotNum, password })
+          });
+          const regData = await registerRes.json();
+          if (regData.success) {
+            token = regData.token;
+            document.getElementById("login-form").classList.add("hidden");
+            document.getElementById("slot-control").classList.remove("hidden");
+            loadslotStatus();
+          } else {
+            alert("Failed to register password.");
+          }
+        }
+      } else {
+        alert("Login failed.");
+      }
+    }
+
+    async function loadslotStatus() {
+      const res = await fetch('/api/status');
+      const status = await res.json();
+      reserved = status[slotNum - 1].reserved;
+      updateUI(status[slotNum - 1]);
+    }
+
+    async function toggleslot() {
+      let reg = null;
+
+      if (!reserved) {
+        reg = prompt("Enter car registration number:");
+        if (!reg) return;
+      }
+
+      const res = await fetch('/api/toggle-slot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot: slotNum, token, reg })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        reserved = data.status.reserved;
+        updateUI(data.status);
+      } else {
+        alert("Update failed: " + (data.error || "Unknown error"));
+      }
+    }
+
+    function updateUI(status) {
+      const btn = document.getElementById("slot-btn");
+      btn.className = "slot" + (status.reserved ? " reserved " : "");
+      btn.textContent = status.reserved
+        ? `Reserved to ${status.reg}.\nTap to Unblock.`
+        : "Available.\nTap to Block.";
+    }
+
+    function logout() {
+      location.reload();
+    }
+  </script>
+
+</body>
+</html>

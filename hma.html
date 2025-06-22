@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin Panel - Reset slot Password</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 30px;
+      background: #f9f9f9;
+    }
+    input, button {
+      padding: 10px;
+      margin: 10px;
+      width: 200px;
+    }
+    #message {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+    #reset-area { display:none; margin-top:20px; }
+  </style>
+</head>
+<body>
+
+  <h2>Admin Panel</h2>
+  <div id="login-area">
+    <p>Enter PIN to access admin tools</p>
+    <input type="password" id="pin" placeholder="Admin PIN" />
+    <button onclick="login()">Login</button>
+  </div>
+
+  <div id="reset-area">
+    <p>Reset a parking slot's password</p>
+    <input type="number" id="slot" placeholder="Slot Number (1-50)" min="1" max="50" />
+    <button onclick="resetPassword()">Reset Password</button>
+    <div id="message"></div>
+    <button onclick="logout()" style="margin-top:20px;">Logout</button>
+  </div>
+
+  <script>
+    const tokenKey = "adminToken";
+
+    // Auto-login if token exists
+    if (sessionStorage.getItem(tokenKey)) {
+      document.getElementById("login-area").style.display = "none";
+      document.getElementById("reset-area").style.display = "block";
+    }
+
+    async function login() {
+      const pin = document.getElementById("pin").value.trim();
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin })
+      });
+      const data = await res.json();
+      if (data.success) {
+        sessionStorage.setItem(tokenKey, data.token);
+        document.getElementById("login-area").style.display = "none";
+        document.getElementById("reset-area").style.display = "block";
+      } else {
+        document.getElementById("message").textContent = "Invalid PIN.";
+      }
+    }
+
+    async function resetPassword() {
+      const slot = parseInt(document.getElementById("slot").value);
+      const token = sessionStorage.getItem(tokenKey);
+
+      if (!token) {
+        document.getElementById("message").textContent = "Not authenticated.";
+        return;
+      }
+      if (!slot || slot < 1 || slot > 50) {
+        document.getElementById("message").textContent = "Enter a valid slot number (1–50)";
+        return;
+      }
+      const confirmReset = confirm("Reset password for slot " + slot + "?");
+      if (!confirmReset) return;
+
+      const res = await fetch('/api/admin/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slot, token })
+      });
+      const data = await res.json();
+      document.getElementById("message").textContent = data.success ? "Password has been reset for slot " + slot + "!" : "Failed: " + (data.error || "Unknown error");
+    }
+
+    function logout() {
+      sessionStorage.removeItem(tokenKey);
+      location.reload();
+    }
+  </script>
+
+</body>
+</html>
